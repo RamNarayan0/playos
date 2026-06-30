@@ -52,6 +52,11 @@ export default function PlayerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [skillFilter, setSkillFilter] = useState("All");
 
+  // Turf Booking State
+  const [selectedMatchForBooking, setSelectedMatchForBooking] = useState(null);
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [turfSearchQuery, setTurfSearchQuery] = useState("");
+
   const filteredMatches = matches
     .filter(m => m.host_id !== currentUserId)
     .filter(m => {
@@ -271,7 +276,7 @@ export default function PlayerDashboard() {
       
       const payload = {
         name: formData.name,
-        turf_id: parseInt(formData.turf_id),
+        turf_id: formData.turf_id ? parseInt(formData.turf_id) : null,
         host_id: currentUserId,
         start_time: start_time,
         total_players: parseInt(formData.size),
@@ -291,6 +296,50 @@ export default function PlayerDashboard() {
       }
     } catch (e) {
       console.error("Failed to create match", e);
+    }
+  };
+
+  const handleOpenBookingModal = (team) => {
+    setSelectedMatchForBooking(team);
+    setShowBookingModal(true);
+  };
+
+  const handleBookTurf = async (turfId) => {
+    if (!selectedMatchForBooking) return;
+    try {
+      const res = await fetch("/api/matches", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          match_id: selectedMatchForBooking.id,
+          turf_id: turfId
+        })
+      });
+      
+      if (res.ok) {
+        const updatedMatch = await res.json();
+        
+        // Update matches local state
+        setMatches(prev => prev.map(m => m.id === updatedMatch.id ? { ...m, turf_id: updatedMatch.turf_id, turf_name: turfs.find(t => t.id === turfId)?.name || 'Booked Turf' } : m));
+        
+        // Update myTeams local state
+        setMyTeams(prev => prev.map(m => m.id === updatedMatch.id ? { ...m, turf_id: updatedMatch.turf_id, turf_name: turfs.find(t => t.id === turfId)?.name || 'Booked Turf' } : m));
+        
+        // Close modal
+        setShowBookingModal(false);
+        setSelectedMatchForBooking(null);
+        alert("Turf booked and assigned successfully!");
+        
+        // Notify other clients via socket
+        if (socketRef.current) {
+          socketRef.current.emit("request_accepted", { matchId: updatedMatch.id, userId: currentUserId });
+        }
+      } else {
+        alert("Failed to book turf.");
+      }
+    } catch (e) {
+      console.error("Booking error:", e);
+      alert("Error booking turf.");
     }
   };
 
@@ -634,8 +683,8 @@ export default function PlayerDashboard() {
 
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">Location (Turf / Venue)</label>
-                  <select className="form-input" value={formData.turf_id} onChange={e => setFormData({...formData, turf_id: e.target.value})} required>
-                    <option value="" disabled>Select a Turf...</option>
+                  <select className="form-input" value={formData.turf_id} onChange={e => setFormData({...formData, turf_id: e.target.value})}>
+                    <option value="">Decide Later (Search & Book Turf After Group Creation)</option>
                     {turfs.map(turf => (
                       <option key={turf.id} value={turf.id}>{turf.name} ({turf.location})</option>
                     ))}
@@ -713,7 +762,14 @@ export default function PlayerDashboard() {
                     return (
                       <div key={team.id} className="card">
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem", marginBottom: "1rem" }}>
-                          <h3>{team.name} <span style={{ fontSize: "0.875rem", fontWeight: "normal", color: "var(--text-muted)" }}>({date} @ {team.turf_name})</span></h3>
+                          <div>
+                            <h3>{team.name} <span style={{ fontSize: "0.875rem", fontWeight: "normal", color: "var(--text-muted)" }}>({date} @ {team.turf_name || "TBD"})</span></h3>
+                          </div>
+                          {!team.turf_id && (
+                            <span className="badge" style={{ background: "rgba(255, 171, 0, 0.15)", color: "rgb(255, 171, 0)", border: "1px solid rgba(255, 171, 0, 0.3)" }}>
+                              📍 No Turf Booked
+                            </span>
+                          )}
                         </div>
                         
                         <div style={{ marginBottom: "1.5rem" }}>
@@ -730,6 +786,16 @@ export default function PlayerDashboard() {
                             </div>
                           </div>
                         </div>
+
+                        {!team.turf_id && (
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ width: "100%", marginTop: "1rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}
+                            onClick={() => handleOpenBookingModal(team)}
+                          >
+                            🔍 Search & Book Turf
+                          </button>
+                        )}
 
                         <button className="btn btn-primary" style={{ width: "100%", marginTop: "1rem" }} onClick={() => openChat(team)}>
                           Open Match Chat
@@ -997,6 +1063,58 @@ export default function PlayerDashboard() {
               You can revoke this anytime in your site preferences.
             </span>
 
+          </div>
+        </div>
+      )}
+
+      {showBookingModal && selectedMatchForBooking && (
+        <div className="modal-backdrop" style={{ display: "flex" }}>
+          <div className="card modal-content" style={{ maxWidth: "500px", width: "90%", padding: "2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ fontSize: "1.5rem" }}>Book Turf for &quot;{selectedMatchForBooking.name}&quot;</h2>
+              <button 
+                onClick={() => { setShowBookingModal(false); setSelectedMatchForBooking(null); }}
+                style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.25rem" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <input 
+                type="text" 
+                className="form-input" 
+                placeholder="Search turfs by name or location..." 
+                value={turfSearchQuery}
+                onChange={e => setTurfSearchQuery(e.target.value)}
+                style={{ marginBottom: 0 }}
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxHeight: "300px", overflowY: "auto", paddingRight: "0.5rem" }}>
+              {turfs
+                .filter(turf => {
+                  const query = turfSearchQuery.toLowerCase();
+                  return turf.name.toLowerCase().includes(query) || turf.location.toLowerCase().includes(query);
+                })
+                .map(turf => (
+                  <div key={turf.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem", background: "rgba(255,255,255,0.03)", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                    <div>
+                      <h4 style={{ color: "var(--primary)", fontWeight: "bold" }}>{turf.name}</h4>
+                      <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.25rem 0 0 0" }}>📍 {turf.location}</p>
+                    </div>
+                    <button className="btn btn-primary" style={{ padding: "0.5rem 1rem", fontSize: "0.875rem" }} onClick={() => handleBookTurf(turf.id)}>
+                      Book Turf
+                    </button>
+                  </div>
+                ))}
+              {turfs.filter(turf => {
+                const query = turfSearchQuery.toLowerCase();
+                return turf.name.toLowerCase().includes(query) || turf.location.toLowerCase().includes(query);
+              }).length === 0 && (
+                <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "1rem" }}>No matching turfs found.</p>
+              )}
+            </div>
           </div>
         </div>
       )}

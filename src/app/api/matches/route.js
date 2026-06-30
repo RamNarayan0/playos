@@ -75,3 +75,31 @@ export async function POST(req) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
+export async function PUT(req) {
+  const startTime = Date.now();
+  try {
+    const body = await req.json();
+    const { match_id, turf_id } = body;
+
+    const query = `
+      UPDATE matches
+      SET turf_id = $1
+      WHERE id = $2
+      RETURNING *
+    `;
+    const result = await pool.query(query, [turf_id ? parseInt(turf_id) : null, parseInt(match_id)]);
+    
+    if (result.rows.length === 0) {
+      return NextResponse.json({ error: 'Match not found' }, { status: 404 });
+    }
+    
+    const duration = Date.now() - startTime;
+    logger.metric('postgis.match_turf_assignment', duration, { match_id, turf_id });
+    
+    return NextResponse.json(result.rows[0]);
+  } catch (error) {
+    logger.error('Error updating match turf assignment', error, { route: '/api/matches:PUT' });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
