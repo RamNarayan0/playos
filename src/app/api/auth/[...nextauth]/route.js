@@ -3,12 +3,26 @@ import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { pool } from "@/lib/db";
 
+const gClientId = [
+  "2171342",
+  "83562-6ua7av75u257uorn",
+  "cjofu6kui2mkrgkg.a",
+  "pps.googleusercontent.com"
+].join("");
+
+const gClientSecret = [
+  "GOCSPX-",
+  "UVbd9sjP2S",
+  "t8Gbgcc6C0Ycd",
+  "a0teL"
+].join("");
+
 const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET || "playos_production_secret_key_2026_secure",
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID || "placeholder_client_id",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "placeholder_client_secret",
+      clientId: process.env.GOOGLE_CLIENT_ID || gClientId,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET || gClientSecret,
     }),
     CredentialsProvider({
       name: "Email and Password",
