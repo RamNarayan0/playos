@@ -4,7 +4,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { pool } from "@/lib/db";
 
 const handler = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET || "default_secure_playos_secret_token_12345",
+  secret: process.env.NEXTAUTH_SECRET || "playos_production_secret_key_2026_secure",
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID || "placeholder_client_id",

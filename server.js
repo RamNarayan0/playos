@@ -48,7 +48,7 @@ app.prepare().then(() => {
     try {
       const token = await getToken({
         req: socket.request,
-        secret: process.env.NEXTAUTH_SECRET || "default_secure_playos_secret_token_12345",
+        secret: process.env.NEXTAUTH_SECRET || "playos_production_secret_key_2026_secure",
       });
 
       if (token && token.id) {
