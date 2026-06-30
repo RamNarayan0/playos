@@ -15,7 +15,8 @@ const handler = NextAuth({
       credentials: {
         email: { label: "Email", type: "email", placeholder: "you@example.com" },
         password: { label: "Password", type: "password" },
-        role: { label: "Role", type: "text" }
+        role: { label: "Role", type: "text" },
+        name: { label: "Name", type: "text" }
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
@@ -29,7 +30,7 @@ const handler = NextAuth({
               VALUES ($1, $2, $3, $4, 'credentials')
               RETURNING *
             `, [
-              credentials.email.split('@')[0], 
+              credentials.name || credentials.email.split('@')[0], 
               credentials.email, 
               credentials.password, 
               credentials.role || 'player'

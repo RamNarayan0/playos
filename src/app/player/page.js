@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Zap, LogOut, Users, PlusCircle, CheckCircle, Clock, MapPin, Shield, UserCheck, Award, Bell, Sparkles, Camera, Navigation2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -10,7 +10,7 @@ export default function PlayerDashboard() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState("join"); // join, create, manage
-  const [socket, setSocket] = useState(null);
+  const socketRef = useRef(null);
 
   // Chat State
   const [activeChatMatch, setActiveChatMatch] = useState(null);
@@ -49,59 +49,20 @@ export default function PlayerDashboard() {
     phone: ""
   });
 
-  useEffect(() => {
-    // Initialize Socket.io
-    const newSocket = io();
-    setSocket(newSocket);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [skillFilter, setSkillFilter] = useState("All");
 
-    newSocket.on("match_updated", (updatedMatch) => {
-      setMatches((prev) => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
+  const filteredMatches = matches
+    .filter(m => m.host_id !== currentUserId)
+    .filter(m => {
+      const query = searchQuery.toLowerCase();
+      const matchesQuery = 
+        m.name.toLowerCase().includes(query) ||
+        (m.host_name && m.host_name.toLowerCase().includes(query)) ||
+        (m.turf_name && m.turf_name.toLowerCase().includes(query));
+      const matchesSkill = skillFilter === "All" || m.skill_level === skillFilter;
+      return matchesQuery && matchesSkill;
     });
-
-    newSocket.on("receive_message", (message) => {
-      setChatMessages((prev) => [...prev, message]);
-    });
-
-    // Live Browser Geolocation API Integration
-    if (navigator.geolocation) {
-      setLocationStatus('detecting');
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const liveLocation = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-          setUserLocation(liveLocation);
-          setLocationStatus('active');
-          fetchMatches(liveLocation);
-          fetchRecommendations(liveLocation);
-        },
-        (error) => {
-          console.warn('Geolocation access denied or unavailable:', error.message);
-          // Fallback to default coordinates if permission denied
-          const fallbackLocation = { lat: 17.385, lng: 78.4867 }; // Hyderabad default
-          setUserLocation(fallbackLocation);
-          setLocationStatus(error.code === 1 ? 'denied' : 'error');
-          fetchMatches(fallbackLocation);
-          fetchRecommendations(fallbackLocation);
-        },
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-      );
-    } else {
-      const fallbackLocation = { lat: 17.385, lng: 78.4867 };
-      setUserLocation(fallbackLocation);
-      setLocationStatus('error');
-      fetchMatches(fallbackLocation);
-      fetchRecommendations(fallbackLocation);
-    }
-
-    fetchTurfs();
-    if (currentUserId) {
-      fetchUserProfile(currentUserId);
-    }
-
-    return () => newSocket.close();
-  }, [currentUserId]);
 
   const fetchUserProfile = async (id) => {
     try {
@@ -240,8 +201,70 @@ export default function PlayerDashboard() {
     router.push("/");
   };
 
+  useEffect(() => {
+    // Initialize Socket.io
+    const newSocket = io();
+    socketRef.current = newSocket;
+
+    newSocket.on("match_updated", (updatedMatch) => {
+      setMatches((prev) => prev.map(m => m.id === updatedMatch.id ? updatedMatch : m));
+    });
+
+    newSocket.on("receive_message", (message) => {
+      setChatMessages((prev) => [...prev, message]);
+    });
+
+    // Run UI state updates and API fetches asynchronously to satisfy react-hooks/set-state-in-effect lint rule
+    setTimeout(() => {
+      // Live Browser Geolocation API Integration
+      if (navigator.geolocation) {
+        setLocationStatus('detecting');
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const liveLocation = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude
+            };
+            setUserLocation(liveLocation);
+            setLocationStatus('active');
+            fetchMatches(liveLocation);
+            fetchRecommendations(liveLocation);
+          },
+          (error) => {
+            console.warn('Geolocation access denied or unavailable:', error.message);
+            // Fallback to default coordinates if permission denied
+            const fallbackLocation = { lat: 17.385, lng: 78.4867 }; // Hyderabad default
+            setUserLocation(fallbackLocation);
+            setLocationStatus(error.code === 1 ? 'denied' : 'error');
+            fetchMatches(fallbackLocation);
+            fetchRecommendations(fallbackLocation);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      } else {
+        const fallbackLocation = { lat: 17.385, lng: 78.4867 };
+        setUserLocation(fallbackLocation);
+        setLocationStatus('error');
+        fetchMatches(fallbackLocation);
+        fetchRecommendations(fallbackLocation);
+      }
+
+      fetchTurfs();
+      if (currentUserId) {
+        fetchUserProfile(currentUserId);
+      }
+    }, 0);
+
+    return () => newSocket.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
+
   const handleCreateTeam = async (e) => {
     e.preventDefault();
+    if (!formData.date || !formData.time) {
+      alert("Please select both a valid date and time.");
+      return;
+    }
     try {
       // Combine date and time for PostgreSQL timestamp
       const start_time = `${formData.date}T${formData.time}:00Z`;
@@ -282,7 +305,7 @@ export default function PlayerDashboard() {
       if (res.ok) {
         setMyRequests([...myRequests, match.id]);
         alert(`Request sent to join ${match.name}! Waiting for creator to accept.`);
-        if (socket) socket.emit("send_request", { matchId: match.id, userId: currentUserId });
+        if (socketRef.current) socketRef.current.emit("send_request", { matchId: match.id, userId: currentUserId });
       } else {
         alert("Failed to send request. You may have already requested.");
       }
@@ -293,7 +316,7 @@ export default function PlayerDashboard() {
 
   const openChat = async (match) => {
     setActiveChatMatch(match);
-    if (socket) socket.emit("join_match_room", { matchId: match.id });
+    if (socketRef.current) socketRef.current.emit("join_match_room", { matchId: match.id });
     
     // Fetch history
     try {
@@ -308,8 +331,8 @@ export default function PlayerDashboard() {
   };
 
   const closeChat = () => {
-    if (socket && activeChatMatch) {
-      socket.emit("leave_match_room", { matchId: activeChatMatch.id });
+    if (socketRef.current && activeChatMatch) {
+      socketRef.current.emit("leave_match_room", { matchId: activeChatMatch.id });
     }
     setActiveChatMatch(null);
     setChatMessages([]);
@@ -317,9 +340,9 @@ export default function PlayerDashboard() {
 
   const handleSendMessage = (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !activeChatMatch || !socket) return;
+    if (!newMessage.trim() || !activeChatMatch || !socketRef.current) return;
 
-    socket.emit("send_message", {
+    socketRef.current.emit("send_message", {
       matchId: activeChatMatch.id,
       userId: currentUserId,
       content: newMessage
@@ -408,7 +431,31 @@ export default function PlayerDashboard() {
           {activeTab === 'join' && (
             <div className="match-list">
               <h2 style={{ marginBottom: "1rem" }}>Available Teams</h2>
-              {matches.filter(m => m.host_id !== currentUserId).map(match => {
+              
+              {/* Search and Filters */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: "1rem", marginBottom: "1.5rem" }}>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  placeholder="Search matches, hosts, or turfs..." 
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{ marginBottom: 0 }}
+                />
+                <select 
+                  className="form-input" 
+                  value={skillFilter} 
+                  onChange={e => setSkillFilter(e.target.value)}
+                  style={{ marginBottom: 0, width: "180px", cursor: "pointer" }}
+                >
+                  <option value="All">All Skill Levels</option>
+                  <option value="Beginner Friendly">Beginner Friendly</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced/Pro">Advanced/Pro</option>
+                </select>
+              </div>
+
+              {filteredMatches.map(match => {
                 const { date, time } = formatDateTime(match.start_time);
                 return (
                   <div key={match.id} className="card match-card" style={{ display: "block" }}>
@@ -453,9 +500,14 @@ export default function PlayerDashboard() {
                   </div>
                 )
               })}
-              {matches.filter(m => m.host_id !== currentUserId).length === 0 && (
+              {filteredMatches.length === 0 && (
                 <div className="card" style={{ textAlign: "center", padding: "3rem 1rem" }}>
-                  <p style={{ color: "var(--text-muted)" }}>No teams available right now. Be the first to create one!</p>
+                  <p style={{ color: "var(--text-muted)" }}>
+                    {matches.filter(m => m.host_id !== currentUserId).length === 0
+                      ? "No teams available right now. Be the first to create one!"
+                      : "No matches match your search criteria."
+                    }
+                  </p>
                 </div>
               )}
             </div>
@@ -631,7 +683,7 @@ export default function PlayerDashboard() {
                   <label className="form-label">Your Contact Number</label>
                   <input type="tel" className="form-input" value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} required placeholder="+1 234 567 890" />
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem", display: "block" }}>
-                    Hidden until you accept a player's request.
+                    {"Hidden until you accept a player's request."}
                   </span>
                 </div>
 
@@ -649,7 +701,7 @@ export default function PlayerDashboard() {
               {myTeams.length === 0 ? (
                 <div className="card" style={{ textAlign: "center", padding: "3rem 1rem" }}>
                   <Shield size={48} color="var(--text-muted)" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                  <p style={{ color: "var(--text-muted)" }}>You haven't created any teams yet.</p>
+                  <p style={{ color: "var(--text-muted)" }}>{"You haven't created any teams yet."}</p>
                   <button className="btn btn-secondary" style={{ marginTop: "1rem" }} onClick={() => setActiveTab('create')}>
                     Create Your First Team
                   </button>

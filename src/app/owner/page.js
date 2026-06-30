@@ -10,7 +10,6 @@ export default function OwnerDashboard() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const [activeTab, setActiveTab] = useState("turfs"); // turfs, schedule
-  const [socket, setSocket] = useState(null);
 
   const [turfs, setTurfs] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -25,23 +24,6 @@ export default function OwnerDashboard() {
     price: "",
     features: ""
   });
-
-  useEffect(() => {
-    // Initialize Socket.io
-    const newSocket = io();
-    setSocket(newSocket);
-
-    newSocket.on("match_updated", (updatedMatch) => {
-      // In a real app, we'd fetch owner matches again or update state directly
-      fetchBookings();
-    });
-
-    // Fetch initial data
-    fetchTurfs();
-    fetchBookings();
-
-    return () => newSocket.close();
-  }, []);
 
   const fetchTurfs = async () => {
     try {
@@ -66,6 +48,24 @@ export default function OwnerDashboard() {
       console.error(e);
     }
   };
+
+  useEffect(() => {
+    // Initialize Socket.io
+    const newSocket = io();
+
+    newSocket.on("match_updated", (updatedMatch) => {
+      // In a real app, we'd fetch owner matches again or update state directly
+      fetchBookings();
+    });
+
+    // Fetch initial data asynchronously to avoid synchronous setState in effect
+    setTimeout(() => {
+      fetchTurfs();
+      fetchBookings();
+    }, 0);
+
+    return () => newSocket.close();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });

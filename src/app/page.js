@@ -10,6 +10,8 @@ export default function AuthPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [userType, setUserType] = useState("player"); // "player" or "owner"
 
@@ -21,6 +23,7 @@ export default function AuthPage() {
       redirect: false,
       email,
       password,
+      name: isSignUp ? name : undefined,
       role: userType
     });
     
@@ -50,8 +53,8 @@ export default function AuthPage() {
             <Zap size={32} color="var(--primary)" />
             PLAYOS
           </div>
-          <h1 className="auth-title">Welcome Back</h1>
-          <p className="auth-subtitle">Select your account type to continue</p>
+          <h1 className="auth-title">{isSignUp ? "Create Account" : "Welcome Back"}</h1>
+          <p className="auth-subtitle">{isSignUp ? "Enter your details to register" : "Select your account type to continue"}</p>
         </div>
 
         <div className="role-selector">
@@ -72,6 +75,26 @@ export default function AuthPage() {
         </div>
 
         <form onSubmit={handleLogin} style={{ marginTop: "1.5rem" }}>
+          {isSignUp && (
+            <div className="form-group">
+              <label className="form-label" htmlFor="name">Full Name</label>
+              <div style={{ position: "relative" }}>
+                <User size={18} style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+                <input 
+                  id="name" 
+                  type="text" 
+                  className="form-input" 
+                  style={{ paddingLeft: "2.75rem" }}
+                  placeholder="John Doe" 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  autoComplete="name"
+                />
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label" htmlFor="email">Email Address</label>
             <div style={{ position: "relative" }}>
@@ -85,6 +108,7 @@ export default function AuthPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
           </div>
@@ -102,12 +126,16 @@ export default function AuthPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
+                autoComplete={isSignUp ? "new-password" : "current-password"}
               />
             </div>
           </div>
 
           <button type="submit" className="btn btn-primary btn-block" disabled={isLoading}>
-            {isLoading ? "Signing in..." : `Sign In as ${userType === 'player' ? 'Player' : 'Owner'}`}
+            {isLoading 
+              ? (isSignUp ? "Registering..." : "Signing in...") 
+              : (isSignUp ? `Register as ${userType === 'player' ? 'Player' : 'Owner'}` : `Sign In as ${userType === 'player' ? 'Player' : 'Owner'}`)
+            }
           </button>
         </form>
 
@@ -124,7 +152,29 @@ export default function AuthPage() {
         </button>
 
         <div className="auth-footer">
-          Don't have an account? <a href="#">Sign Up</a>
+          {isSignUp ? (
+            <>
+              {"Already have an account? "}
+              <button 
+                type="button" 
+                onClick={() => setIsSignUp(false)} 
+                style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
+              >
+                Log In
+              </button>
+            </>
+          ) : (
+            <>
+              {"Don't have an account? "}
+              <button 
+                type="button" 
+                onClick={() => setIsSignUp(true)} 
+                style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", padding: 0, font: "inherit", textDecoration: "underline" }}
+              >
+                Sign Up
+              </button>
+            </>
+          )}
         </div>
       </div>
     </main>

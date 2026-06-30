@@ -6,7 +6,7 @@ const { Server } = require('socket.io');
 const { pool } = require('./src/lib/db');
 
 const dev = process.env.NODE_ENV !== "production";
-const hostname = "localhost";
+const hostname = process.env.HOSTNAME || (dev ? "localhost" : "0.0.0.0");
 const port = process.env.PORT || 3000;
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
@@ -83,23 +83,18 @@ app.prepare().then(() => {
       timestamp: new Date().toISOString()
     }));
 
-    // Increment total connections and active gauge
-    socketConnectionsTotal.inc({ event: 'connection' });
-    socketConnectionGauge.inc();
+    // Track start time for latency tracking
 
     // Record start time for latency tracking
     socket.__connectStart = Date.now();
 
     // Handle disconnects
     socket.on('disconnect', (reason) => {
-      socketDisconnectsTotal.inc({ event: 'disconnect' });
-      socketConnectionGauge.dec();
       const durationSec = (Date.now() - socket.__connectStart) / 1000;
-      socketEventDuration.observe({ event: 'connection_lifecycle' }, durationSec);
       console.log(JSON.stringify({
         level: 'METRIC',
         metric: 'socket.connection_terminated',
-        active_connections: socketConnectionGauge ? socketConnectionGauge.get() : null,
+        active_connections: activeConnectionsCount,
         duration_sec: durationSec,
         reason,
         user_id: socket.user?.id,
@@ -110,7 +105,7 @@ app.prepare().then(() => {
 
     // Reconnect attempt tracking
     socket.on('reconnect_attempt', () => {
-      socketReconnectAttemptsTotal.inc({ event: 'reconnect_attempt' });
+      console.log('Socket reconnect attempt by user:', socket.user?.id);
     });
 
     // Simple request forwarding
