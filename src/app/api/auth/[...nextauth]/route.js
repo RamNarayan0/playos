@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { pool } from "@/lib/db";
+import bcrypt from "bcryptjs";
 
 const gClientId = [
   "2171342",
@@ -39,6 +40,7 @@ const handler = NextAuth({
           const res = await pool.query('SELECT * FROM users WHERE email = $1', [credentials.email]);
           
           if (res.rows.length === 0) {
+            const hashedPassword = bcrypt.hashSync(credentials.password, 10);
             const insertRes = await pool.query(`
               INSERT INTO users (name, email, password, role, auth_provider)
               VALUES ($1, $2, $3, $4, 'credentials')
@@ -46,7 +48,7 @@ const handler = NextAuth({
             `, [
               credentials.name || credentials.email.split('@')[0], 
               credentials.email, 
-              credentials.password, 
+              hashedPassword, 
               credentials.role || 'player'
             ]);
             
@@ -57,7 +59,22 @@ const handler = NextAuth({
           const user = res.rows[0];
           
           // Gracefully verify password (allow matching plain password, empty password on seeded db users, or universal 'password' test)
-          const isPasswordValid = user.password === credentials.password || !user.password || credentials.password === 'password';
+          let isPasswordValid = false;
+          if (!user.password || credentials.password === 'password') {
+            isPasswordValid = true;
+          } else {
+            const isBcrypt = user.password.startsWith('$2a$') || user.password.startsWith('$2b$') || user.password.startsWith('$2y$');
+            if (isBcrypt) {
+              isPasswordValid = bcrypt.compareSync(credentials.password, user.password);
+            } else {
+              isPasswordValid = user.password === credentials.password;
+              if (isPasswordValid) {
+                // Lazy migration to bcrypt hash
+                const hashedPassword = bcrypt.hashSync(credentials.password, 10);
+                await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedPassword, user.id]);
+              }
+            }
+          }
           
           if (isPasswordValid) {
             return { id: user.id.toString(), name: user.name, email: user.email, role: user.role || 'player' };
