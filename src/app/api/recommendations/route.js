@@ -33,13 +33,16 @@ export async function GET(req) {
     // 2. Query available open matches within geospatial radius
     const query = `
       SELECT m.*, t.name as turf_name, t.location as turf_location, u.name as host_name,
-             ST_Distance(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)) as distance_meters
+             CASE 
+               WHEN t.geom IS NOT NULL THEN ST_Distance(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+               ELSE NULL
+             END as distance_meters
       FROM matches m
-      JOIN turfs t ON m.turf_id = t.id
+      LEFT JOIN turfs t ON m.turf_id = t.id
       JOIN users u ON m.host_id = u.id
       WHERE m.status = 'OPEN' 
         AND m.players_needed > 0
-        AND ST_DWithin(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326), $3)
+        AND (m.turf_id IS NULL OR ST_DWithin(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326), $3))
     `;
     const result = await pool.query(query, [userLng, userLat, maxDistance]);
     const matches = result.rows;

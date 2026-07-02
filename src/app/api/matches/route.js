@@ -17,12 +17,15 @@ export async function GET(req) {
     if (isGeospatial) {
       query = `
         SELECT m.*, t.name as turf_name, t.location as turf_location, u.name as host_name,
-        ST_Distance(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326)) as distance_meters
+        CASE 
+          WHEN t.geom IS NOT NULL THEN ST_Distance(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326))
+          ELSE NULL
+        END as distance_meters
         FROM matches m
-        JOIN turfs t ON m.turf_id = t.id
+        LEFT JOIN turfs t ON m.turf_id = t.id
         JOIN users u ON m.host_id = u.id
-        WHERE ST_DWithin(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326), $3)
-        ORDER BY distance_meters ASC
+        WHERE (m.turf_id IS NULL OR ST_DWithin(t.geom, ST_SetSRID(ST_MakePoint($1, $2), 4326), $3))
+        ORDER BY distance_meters ASC NULLS LAST
       `;
       values = [userLng, userLat, maxDistance];
     } else {
@@ -30,7 +33,7 @@ export async function GET(req) {
         SELECT m.*, t.name as turf_name, t.location as turf_location, u.name as host_name,
         NULL as distance_meters
         FROM matches m
-        JOIN turfs t ON m.turf_id = t.id
+        LEFT JOIN turfs t ON m.turf_id = t.id
         JOIN users u ON m.host_id = u.id
         ORDER BY m.start_time ASC
       `;
