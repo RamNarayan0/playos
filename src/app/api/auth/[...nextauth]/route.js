@@ -91,8 +91,41 @@ const handler = NextAuth({
   callbacks: {
     async jwt({ token, user, account }) {
       if (user) {
-        token.id = user.id;
-        token.role = user.role || 'player';
+        if (account?.provider === 'google') {
+          try {
+            const email = user.email;
+            const name = user.name || email.split('@')[0];
+            
+            // Check if user exists in the database
+            const res = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+            let dbUser;
+            if (res.rows.length === 0) {
+              // Create user with standard incrementing integer ID
+              const insertRes = await pool.query(`
+                INSERT INTO users (name, email, auth_provider, role)
+                VALUES ($1, $2, 'google', 'player')
+                RETURNING *
+              `, [name, email]);
+              dbUser = insertRes.rows[0];
+            } else {
+              dbUser = res.rows[0];
+              // Keep auth_provider updated to google
+              if (dbUser.auth_provider !== 'google') {
+                await pool.query("UPDATE users SET auth_provider = 'google' WHERE id = $1", [dbUser.id]);
+              }
+            }
+            token.id = dbUser.id.toString();
+            token.role = dbUser.role || 'player';
+          } catch (e) {
+            console.error("Error mapping Google user to database:", e);
+            token.id = user.id; // fallback
+            token.role = user.role || 'player';
+          }
+        } else {
+          // Credentials provider
+          token.id = user.id;
+          token.role = user.role || 'player';
+        }
       }
       return token;
     },

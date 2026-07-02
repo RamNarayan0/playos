@@ -16,7 +16,12 @@ export async function GET(req) {
     let userSkill = 'Beginner';
     
     if (userId) {
-      const userRes = await pool.query('SELECT preferred_sports, skill_level FROM users WHERE id = $1', [userId]);
+      const parsedId = parseInt(userId, 10);
+      if (isNaN(parsedId) || parsedId > 2147483647 || parsedId < 1) {
+        return NextResponse.json({ error: 'Invalid user_id' }, { status: 400 });
+      }
+      
+      const userRes = await pool.query('SELECT preferred_sports, skill_level FROM users WHERE id = $1', [parsedId]);
       if (userRes.rows.length > 0) {
         if (userRes.rows[0].preferred_sports) {
           userSports = userRes.rows[0].preferred_sports.split(',').map(s => s.trim().toLowerCase());
