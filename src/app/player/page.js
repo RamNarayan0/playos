@@ -630,9 +630,14 @@ export default function PlayerDashboard() {
                       }
                       if (request.status === 'ACCEPTED') {
                         return (
-                          <button className="btn" style={{ width: "100%", background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
-                            ✓ Joined Team
-                          </button>
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button className="btn" style={{ flex: 1, background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
+                              ✓ Joined Team
+                            </button>
+                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => openChat(match)}>
+                              Open Chat
+                            </button>
+                          </div>
                         );
                       }
                       if (request.status === 'REJECTED') {
@@ -753,9 +758,14 @@ export default function PlayerDashboard() {
                       }
                       if (request.status === 'ACCEPTED') {
                         return (
-                          <button className="btn" style={{ width: "100%", background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
-                            ✓ Joined Team
-                          </button>
+                          <div style={{ display: "flex", gap: "0.5rem" }}>
+                            <button className="btn" style={{ flex: 1, background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
+                              ✓ Joined Team
+                            </button>
+                            <button className="btn btn-primary" style={{ flex: 1 }} onClick={() => openChat(match)}>
+                              Open Chat
+                            </button>
+                          </div>
                         );
                       }
                       if (request.status === 'REJECTED') {
