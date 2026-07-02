@@ -15,6 +15,7 @@ export default function OwnerDashboard() {
   const [bookings, setBookings] = useState([]);
 
   // Use real user from session
+  const currentUserId = session?.user?.id ? parseInt(session.user.id) : null;
   const currentUserName = session?.user?.name || "Box Admin";
 
   // Create Turf Form State
@@ -51,7 +52,9 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     // Initialize Socket.io
-    const newSocket = io();
+    const newSocket = io({
+      query: { userId: currentUserId }
+    });
 
     newSocket.on("match_updated", (updatedMatch) => {
       // In a real app, we'd fetch owner matches again or update state directly
@@ -65,7 +68,7 @@ export default function OwnerDashboard() {
     }, 0);
 
     return () => newSocket.close();
-  }, []);
+  }, [currentUserId]);
 
   const handleSignOut = async () => {
     await signOut({ redirect: false });

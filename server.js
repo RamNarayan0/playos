@@ -56,6 +56,13 @@ app.prepare().then(() => {
         return next();
       }
 
+      // Query parameter fallback for strict browser cookie blocking (incognito / cross-domain)
+      const userIdQuery = socket.handshake.query.userId;
+      if (userIdQuery && userIdQuery !== 'null' && userIdQuery !== 'undefined') {
+        socket.user = { id: parseInt(userIdQuery), role: 'player' };
+        return next();
+      }
+
       // Local testing smoothing fallback if socket config omits cookies
       if (process.env.NODE_ENV !== "production") {
         socket.user = { id: 1, role: 'player', isDevFallback: true };

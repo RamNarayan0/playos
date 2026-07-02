@@ -70,6 +70,8 @@ export default function PlayerDashboard() {
       return matchesQuery && matchesSkill;
     });
 
+  const joinedTeams = matches.filter(m => m.players && m.players.some(p => p.id === currentUserId));
+
   const fetchUserProfile = async (id) => {
     try {
       const res = await fetch(`/api/user/profile?user_id=${id}`);
@@ -171,7 +173,7 @@ export default function PlayerDashboard() {
       const res = await fetch(`/api/requests?user_id=${currentUserId}`);
       if (res.ok) {
         const data = await res.json();
-        setMyRequests(data.map(r => r.match_id));
+        setMyRequests(data);
       }
     } catch (e) {
       console.error("Error fetching sent requests:", e);
@@ -237,7 +239,9 @@ export default function PlayerDashboard() {
 
   useEffect(() => {
     // Initialize Socket.io
-    const newSocket = io();
+    const newSocket = io({
+      query: { userId: currentUserId }
+    });
     socketRef.current = newSocket;
 
     newSocket.on("match_updated", (updatedMatch) => {
@@ -603,14 +607,42 @@ export default function PlayerDashboard() {
                       </div>
                     </div>
 
-                    <button 
-                      className={`btn ${myRequests.includes(match.id) ? 'btn-secondary' : 'btn-primary'}`} 
-                      style={{ width: "100%" }}
-                      onClick={() => handleRequestJoin(match)}
-                      disabled={myRequests.includes(match.id) || match.players_needed === 0}
-                    >
-                      {myRequests.includes(match.id) ? "Request Pending..." : "Send Request to Join"}
-                    </button>
+                    {(() => {
+                      const request = myRequests.find(r => r.match_id === match.id);
+                      if (!request) {
+                        return (
+                          <button 
+                            className="btn btn-primary" 
+                            style={{ width: "100%" }}
+                            onClick={() => handleRequestJoin(match)}
+                            disabled={match.players_needed === 0}
+                          >
+                            {match.players_needed === 0 ? "Team Full" : "Send Request to Join"}
+                          </button>
+                        );
+                      }
+                      if (request.status === 'PENDING') {
+                        return (
+                          <button className="btn btn-secondary" style={{ width: "100%" }} disabled>
+                            Request Pending...
+                          </button>
+                        );
+                      }
+                      if (request.status === 'ACCEPTED') {
+                        return (
+                          <button className="btn" style={{ width: "100%", background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
+                            ✓ Joined Team
+                          </button>
+                        );
+                      }
+                      if (request.status === 'REJECTED') {
+                        return (
+                          <button className="btn" style={{ width: "100%", background: "rgba(255, 75, 75, 0.15)", color: "var(--error)", border: "1px solid rgba(255, 75, 75, 0.3)", cursor: "default" }} disabled>
+                            Request Declined
+                          </button>
+                        );
+                      }
+                    })()}
                   </div>
                 )
               })}
@@ -698,14 +730,42 @@ export default function PlayerDashboard() {
                       </div>
                     </div>
 
-                    <button 
-                      className={`btn ${myRequests.includes(match.id) ? 'btn-secondary' : 'btn-primary'}`} 
-                      style={{ width: "100%" }}
-                      onClick={() => handleRequestJoin(match)}
-                      disabled={myRequests.includes(match.id)}
-                    >
-                      {myRequests.includes(match.id) ? "Fulfillment Request Active" : "Instant Algorithmic Join"}
-                    </button>
+                    {(() => {
+                      const request = myRequests.find(r => r.match_id === match.id);
+                      if (!request) {
+                        return (
+                          <button 
+                            className="btn btn-primary" 
+                            style={{ width: "100%" }}
+                            onClick={() => handleRequestJoin(match)}
+                            disabled={match.players_needed === 0}
+                          >
+                            {match.players_needed === 0 ? "Team Full" : "Instant Algorithmic Join"}
+                          </button>
+                        );
+                      }
+                      if (request.status === 'PENDING') {
+                        return (
+                          <button className="btn btn-secondary" style={{ width: "100%" }} disabled>
+                            Fulfillment Request Active
+                          </button>
+                        );
+                      }
+                      if (request.status === 'ACCEPTED') {
+                        return (
+                          <button className="btn" style={{ width: "100%", background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)", cursor: "default" }} disabled>
+                            ✓ Joined Team
+                          </button>
+                        );
+                      }
+                      if (request.status === 'REJECTED') {
+                        return (
+                          <button className="btn" style={{ width: "100%", background: "rgba(255, 75, 75, 0.15)", color: "var(--error)", border: "1px solid rgba(255, 75, 75, 0.3)", cursor: "default" }} disabled>
+                            Request Declined
+                          </button>
+                        );
+                      }
+                    })()}
                   </div>
                 )
               })}
@@ -898,6 +958,55 @@ export default function PlayerDashboard() {
                         </button>
                       </div>
                     )
+                  })}
+                </div>
+              )}
+
+              <h2 style={{ marginTop: "3rem", marginBottom: "1rem" }}>Teams You Joined</h2>
+              {joinedTeams.length === 0 ? (
+                <div className="card" style={{ textAlign: "center", padding: "3rem 1rem" }}>
+                  <Users size={48} color="var(--text-muted)" style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
+                  <p style={{ color: "var(--text-muted)" }}>{"You haven't joined any teams yet."}</p>
+                </div>
+              ) : (
+                <div className="match-list">
+                  {joinedTeams.map(team => {
+                    const { date, time } = formatDateTime(team.start_time);
+                    return (
+                      <div key={team.id} className="card">
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-color)", paddingBottom: "1rem", marginBottom: "1rem" }}>
+                          <div>
+                            <h3>{team.name} <span style={{ fontSize: "0.875rem", fontWeight: "normal", color: "var(--text-muted)" }}>({date} @ {team.turf_name || "TBD"})</span></h3>
+                            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem", margin: "0.25rem 0 0 0" }}>Hosted by {team.host_name}</p>
+                          </div>
+                          <span className="badge badge-green" style={{ background: "rgba(0, 229, 155, 0.15)", color: "var(--primary)", border: "1px solid rgba(0, 229, 155, 0.3)" }}>
+                            Joined
+                          </span>
+                        </div>
+
+                        <div style={{ marginBottom: "1.5rem" }}>
+                          <h4 style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Accepted Players ({(team.players?.length || 0) + 1}/{team.total_players})
+                          </h4>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "rgba(255,255,255,0.03)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                              <CheckCircle size={16} color="var(--primary)" />
+                              <span>{team.host_name} (Creator)</span>
+                            </div>
+                            {team.players && team.players.map(player => (
+                              <div key={player.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: player.id === currentUserId ? "rgba(0, 229, 155, 0.1)" : "rgba(255,255,255,0.05)", padding: "0.75rem", borderRadius: "8px", border: player.id === currentUserId ? "1px solid rgba(0, 229, 155, 0.2)" : "1px solid var(--border-color)" }}>
+                                <CheckCircle size={16} color="var(--primary)" />
+                                <span>{player.id === currentUserId ? "You" : player.name}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button className="btn btn-primary" style={{ width: "100%" }} onClick={() => openChat(team)}>
+                          Open Match Chat
+                        </button>
+                      </div>
+                    );
                   })}
                 </div>
               )}
