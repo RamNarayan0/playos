@@ -7,7 +7,13 @@ export async function GET() {
     return NextResponse.json(result.rows);
   } catch (error) {
     console.error('Error fetching turfs:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    const db = require('@/lib/db');
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: error.message,
+      db_source: db.connectionSource,
+      db_url: db.connectionStringObfuscated
+    }, { status: 500 });
   }
 }
 

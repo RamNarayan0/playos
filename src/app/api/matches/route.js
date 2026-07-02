@@ -46,7 +46,13 @@ export async function GET(req) {
     return NextResponse.json(result.rows);
   } catch (error) {
     logger.error('Error executing matches retrieval pool', error, { route: '/api/matches' });
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    const db = require('@/lib/db');
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: error.message,
+      db_source: db.connectionSource,
+      db_url: db.connectionStringObfuscated
+    }, { status: 500 });
   }
 }
 
