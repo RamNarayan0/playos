@@ -41,12 +41,36 @@ export async function GET(req) {
 
     const result = await pool.query(query, values);
     const duration = Date.now() - startTime;
+
+    // Fetch accepted players for these matches to render on cards
+    const matchIds = result.rows.map(m => m.id);
+    let playersMap = {};
+    if (matchIds.length > 0) {
+      const playersRes = await pool.query(`
+        SELECT mp.match_id, u.id as user_id, u.name as user_name
+        FROM match_players mp
+        JOIN users u ON mp.user_id = u.id
+        WHERE mp.match_id = ANY($1)
+      `, [matchIds]);
+      
+      playersRes.rows.forEach(row => {
+        if (!playersMap[row.match_id]) {
+          playersMap[row.match_id] = [];
+        }
+        playersMap[row.match_id].push({ id: row.user_id, name: row.user_name });
+      });
+    }
+
+    const matchesWithPlayers = result.rows.map(m => ({
+      ...m,
+      players: playersMap[m.id] || []
+    }));
     
     // --- PostGIS Spatial Telemetry Pipeline Tracing ---
     const metricLabel = isGeospatial ? 'postgis.stdwithin_scan' : 'postgis.feed_scan';
     logger.metric(metricLabel, duration, { records: result.rows.length, geospatial: isGeospatial });
 
-    return NextResponse.json(result.rows);
+    return NextResponse.json(matchesWithPlayers);
   } catch (error) {
     logger.error('Error executing matches retrieval pool', error, { route: '/api/matches' });
     const db = require('@/lib/db');

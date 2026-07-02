@@ -22,6 +22,7 @@ export default function PlayerDashboard() {
   const [turfs, setTurfs] = useState([]);
   const [myTeams, setMyTeams] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
+  const [incomingRequests, setIncomingRequests] = useState([]);
 
   // Use real user ID from session
   const currentUserId = session?.user?.id ? parseInt(session.user.id) : null;
@@ -151,6 +152,32 @@ export default function PlayerDashboard() {
     }
   };
 
+  const fetchIncomingRequests = async () => {
+    if (!currentUserId) return;
+    try {
+      const res = await fetch(`/api/requests?host_id=${currentUserId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setIncomingRequests(data);
+      }
+    } catch (e) {
+      console.error("Error fetching incoming requests:", e);
+    }
+  };
+
+  const fetchMySentRequests = async () => {
+    if (!currentUserId) return;
+    try {
+      const res = await fetch(`/api/requests?user_id=${currentUserId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setMyRequests(data.map(r => r.match_id));
+      }
+    } catch (e) {
+      console.error("Error fetching sent requests:", e);
+    }
+  };
+
   const fetchMatches = async (location = null) => {
     try {
       let url = "/api/matches";
@@ -164,6 +191,8 @@ export default function PlayerDashboard() {
         setMatches(data);
         // Split into myTeams and others if needed
         setMyTeams(data.filter(m => m.host_id === currentUserId));
+        fetchIncomingRequests();
+        fetchMySentRequests();
       }
     } catch (e) {
       console.error(e);
@@ -360,6 +389,42 @@ export default function PlayerDashboard() {
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleAcceptRequest = async (requestId) => {
+    try {
+      const res = await fetch("/api/requests", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId, status: "ACCEPTED" })
+      });
+      if (res.ok) {
+        alert("Request accepted!");
+        fetchIncomingRequests();
+        fetchMatches(userLocation);
+        if (socketRef.current) {
+          socketRef.current.emit("request_accepted", { userId: currentUserId });
+        }
+      }
+    } catch (e) {
+      console.error("Error accepting request:", e);
+    }
+  };
+
+  const handleRejectRequest = async (requestId) => {
+    try {
+      const res = await fetch("/api/requests", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ request_id: requestId, status: "REJECTED" })
+      });
+      if (res.ok) {
+        alert("Request rejected.");
+        fetchIncomingRequests();
+      }
+    } catch (e) {
+      console.error("Error rejecting request:", e);
     }
   };
 
@@ -773,17 +838,48 @@ export default function PlayerDashboard() {
                         </div>
                         
                         <div style={{ marginBottom: "1.5rem" }}>
-                          <h4 style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Pending Requests (0)</h4>
-                          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>No pending requests.</p>
+                          <h4 style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Pending Requests ({incomingRequests.filter(r => r.match_id === team.id).length})
+                          </h4>
+                          {incomingRequests.filter(r => r.match_id === team.id).length === 0 ? (
+                            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>No pending requests.</p>
+                          ) : (
+                            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                              {incomingRequests.filter(r => r.match_id === team.id).map(req => (
+                                <div key={req.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.03)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                                  <div>
+                                    <span style={{ fontWeight: "bold" }}>{req.user_name}</span>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginLeft: "0.5rem" }}>⭐ {req.reputation_score} Rep</span>
+                                  </div>
+                                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                                    <button className="btn btn-primary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.75rem" }} onClick={() => handleAcceptRequest(req.id)}>
+                                      Accept
+                                    </button>
+                                    <button className="btn btn-secondary" style={{ padding: "0.25rem 0.75rem", fontSize: "0.75rem" }} onClick={() => handleRejectRequest(req.id)}>
+                                      Reject
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
-                        <div>
-                          <h4 style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>Accepted Players (1/{team.total_players})</h4>
+                        <div style={{ marginBottom: "1rem" }}>
+                          <h4 style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                            Accepted Players ({(team.players?.length || 0) + 1}/{team.total_players})
+                          </h4>
                           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "rgba(0, 229, 155, 0.1)", padding: "0.75rem", borderRadius: "8px", border: "1px solid rgba(0, 229, 155, 0.2)" }}>
                               <CheckCircle size={16} color="var(--primary)" />
                               <span>You (Creator)</span>
                             </div>
+                            {team.players && team.players.map(player => (
+                              <div key={player.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", background: "rgba(255,255,255,0.05)", padding: "0.75rem", borderRadius: "8px", border: "1px solid var(--border-color)" }}>
+                                <CheckCircle size={16} color="var(--primary)" />
+                                <span>{player.name}</span>
+                              </div>
+                            ))}
                           </div>
                         </div>
 
